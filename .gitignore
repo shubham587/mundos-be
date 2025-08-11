@@ -1,0 +1,68 @@
+venv/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.development
+.env.test
+.env.production
+venv_be/
+.venv/
+
+
+__pycache__/
+.pytest_cache/
+.vscode/
+.idea/
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Generic env variants
+.env.*
+.envrc
+
+# Keep example env tracked
+!sample.env
+
+# Secrets & credentials
+confidential.json
+token.json
+client_secret*.json
+
+# Python artifacts
+*.pyc
+*.pyo
+*.pyd
+
+# Coverage & caches
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Logs
+logs/
+*.log
+
+# SSL/TLS certs and keys
+*.pem
+*.key
+*.crt
+*.der
+
+# pyenv
+.python-version
+
+# Packaging / build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+

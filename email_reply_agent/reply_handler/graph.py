@@ -22,6 +22,7 @@ from .nodes import (
     update_campaign_status,
     update_campaign_to_declined,
     ai_summary,
+    update_campaign_re_engaged
 )
 
 
@@ -45,6 +46,7 @@ def build_graph():
     graph.add_node("update_campaign_status", update_campaign_status)
     graph.add_node("update_campaign_to_declined", update_campaign_to_declined)
     graph.add_node("ai_summary", ai_summary)
+    graph.add_node("update_campaign_re_engaged", update_campaign_re_engaged)
 
     graph.set_entry_point("load_patient_and_campaign")
 
@@ -77,10 +79,11 @@ def build_graph():
     def answer_checker(state: Dict[str, Any]) -> str:
         answer = (state.get("kb_answer") or "").strip()
         if answer and answer != "NO_ANSWER":
-            return "generate_answer_email"
+            return "update_campaign_re_engaged"
         return "update_campaign_for_handoff"
 
     graph.add_conditional_edges("query_knowledge_base", answer_checker)
+    graph.add_edge("update_campaign_re_engaged", "generate_answer_email")
     graph.add_edge("generate_answer_email", "send_reply_email")
     graph.add_edge("update_campaign_for_handoff", "generate_handoff_email")
     graph.add_edge("generate_handoff_email", "send_reply_email")

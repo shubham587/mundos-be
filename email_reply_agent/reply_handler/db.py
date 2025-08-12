@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from pymongo import MongoClient, DESCENDING
 from .config import settings
@@ -87,6 +87,8 @@ def set_campaign_form_sent(campaign_id: ObjectId, link_url: str, reply_thread_id
         {
             "$set": {
                 "status": "BOOKING_INITIATED",
+                "follow_up_details.next_attempt_at": now + timedelta(days=1),
+                "follow_up_details.attempts_made": 1,
                 "booking_funnel.status": "FORM_SENT",
                 "booking_funnel.link_url": link_url,
                 "channel.thread_id": reply_thread_id,
@@ -184,4 +186,14 @@ def mark_processed_message(email_address: str, gmail_message_id: str, thread_id:
             }
         },
         upsert=True,
+    )
+
+
+
+def set_campaign_re_engaged(campaign_id: ObjectId) -> None:
+    coll = get_campaign_collection()
+    now = datetime.now(timezone.utc)
+    coll.update_one(
+        {"_id": campaign_id},
+        {"$set": {"status": "RE_ENGAGED", "updated_at": now, "follow_up_details.next_attempt_at": now + timedelta(days=3), "follow_up_details.attempts_made": 2}},
     )

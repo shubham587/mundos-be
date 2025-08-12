@@ -12,7 +12,7 @@ class AppointmentBookingRequest(BaseModel):
     phone: str
     appointment_date: datetime
     service_name: str
-    duration_minutes: Optional[int] = 45
+    duration_minutes: Optional[int] = 30
 
 
 class AppointmentBookingResponse(BaseModel):

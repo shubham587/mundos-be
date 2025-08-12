@@ -17,6 +17,7 @@ from .db import (
     insert_interaction,
     fetch_interactions_for_campaign,
     update_engagement_summary,
+    set_campaign_re_engaged
 )
 from .prompts import INTENT_CLASSIFIER_PROMPT, ALLOWED_INTENTS
 from .prompts import KB_QA_PROMPT, KB_TEXT
@@ -121,7 +122,8 @@ def generate_booking_email(state: Dict[str, Any]) -> Dict[str, Any]:
         f"Thanks for your reply. You can choose a convenient time using the link below:\n"
         f"{link}\n\n"
         f"If you have any questions, just reply to this email.\n\n"
-        f"Best,\nYour Care Team"
+        f"Best,\nBright Smile Clinic Team"
+        f"Contact us at +55 (11) 4567-8910"
     )
     state["booking_link"] = link
     state["email_content"] = email_content
@@ -366,6 +368,7 @@ def generate_answer_email(state: Dict[str, Any]) -> Dict[str, Any]:
     )
     state["email_content"] = body
     state["subject"] = subject
+
     return state
 
 
@@ -395,4 +398,12 @@ def generate_handoff_email(state: Dict[str, Any]) -> Dict[str, Any]:
     )
     state["email_content"] = body
     state["subject"] = subject
+    return state
+
+
+def update_campaign_re_engaged(state: Dict[str, Any]) -> Dict[str, Any]:
+    campaign = state.get("campaign", {})
+    campaign_id: Optional[ObjectId] = campaign.get("_id")
+    if campaign_id:
+        set_campaign_re_engaged(campaign_id)
     return state

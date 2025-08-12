@@ -36,6 +36,12 @@ class AppSettings(BaseSettings):
         default="development", alias="ENVIRONMENT"
     )
 
+    # Twilio / booking settings
+    booking_base_url: str = Field(default="", alias="BOOKING_BASE_URL")
+    twilio_account_sid: str | None = Field(default=None, alias="TWILIO_ACCOUNT_SID")
+    twilio_auth_token: str | None = Field(default=None, alias="TWILIO_AUTH_TOKEN")
+    twilio_phone_number: str | None = Field(default=None, alias="TWILIO_PHONE_NUMBER")
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> AppSettings:

@@ -46,18 +46,32 @@ async def dashboard_stats() -> Dict[str, Any]:
     start_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
     next_month = datetime(now.year + (now.month // 12), ((now.month % 12) + 1), 1, tzinfo=timezone.utc)
 
+    # Helpers to normalize datetimes possibly stored as strings or naive
+    def _as_utc(dt_like: Any) -> datetime | None:
+        if isinstance(dt_like, datetime):
+            if dt_like.tzinfo is None:
+                return dt_like.replace(tzinfo=timezone.utc)
+            return dt_like.astimezone(timezone.utc)
+        if isinstance(dt_like, str):
+            try:
+                parsed = datetime.fromisoformat(dt_like.replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                else:
+                    parsed = parsed.astimezone(timezone.utc)
+                return parsed
+            except Exception:
+                return None
+        return None
+
+    # Appointments booked this month
     booked_month = 0
     for appt in await repo.find_many("appointments", {}):
-        ts = appt.get("appointment_date")
-        if isinstance(ts, str):
-            try:
-                ts = datetime.fromisoformat(ts)
-            except Exception:
-                ts = None
-        if ts and start_month <= ts.replace(tzinfo=timezone.utc) < next_month:
-            if appt.get("status") == "booked":
-                booked_month += 1
+        ts = _as_utc(appt.get("appointment_date"))
+        if ts and start_month <= ts < next_month and appt.get("status") == "booked":
+            booked_month += 1
 
+    # Active campaign counts (current snapshot)
     handoffs = await repo.count_many("campaigns", {"status": CampaignStatus.HANDOFF_REQUIRED.value})
     active_recovery = await repo.count_many(
         "campaigns",
@@ -66,30 +80,170 @@ async def dashboard_stats() -> Dict[str, Any]:
             "status": {"$in": [CampaignStatus.ATTEMPTING_RECOVERY.value, CampaignStatus.RE_ENGAGED.value]},
         },
     )
-
-    total_recovery = await repo.count_many("campaigns", {"campaign_type": CampaignType.RECOVERY.value})
-    recovered = await repo.count_many("campaigns", {"status": CampaignStatus.RECOVERED.value})
-    recovery_rate = (recovered / total_recovery * 100.0) if total_recovery else 0.0
-
-    total_recall = await repo.count_many("campaigns", {"campaign_type": CampaignType.RECALL.value})
-    recall_recovered = await repo.count_many(
+    active_recall = await repo.count_many(
         "campaigns",
         {
             "campaign_type": CampaignType.RECALL.value,
-            "status": CampaignStatus.RECOVERED.value,
+            "status": {"$in": [CampaignStatus.ATTEMPTING_RECOVERY.value, CampaignStatus.RE_ENGAGED.value]},
         },
     )
-    recall_rate = (recall_recovered / total_recall * 100.0) if total_recall else 0.0
+
+    # Monthly campaign stats (filter in Python to be robust against mixed datetime storage)
+    campaigns = await repo.find_many("campaigns", {})
+    monthly: list[Dict[str, Any]] = []
+    for c in campaigns:
+        upd = _as_utc(c.get("updated_at")) or _as_utc(c.get("created_at"))
+        if upd and start_month <= upd < next_month:
+            monthly.append(c)
+
+    recoveries_month = sum(1 for c in monthly if c.get("status") == CampaignStatus.RECOVERED.value)
+    engaged_month = sum(1 for c in monthly if c.get("status") == CampaignStatus.RE_ENGAGED.value)
+
+    # Rates scoped to this month
+    recov_month_den = sum(1 for c in monthly if c.get("campaign_type") == CampaignType.RECOVERY.value)
+    recov_month_num = sum(
+        1
+        for c in monthly
+        if c.get("campaign_type") == CampaignType.RECOVERY.value and c.get("status") == CampaignStatus.RECOVERED.value
+    )
+    recovery_rate = (recov_month_num / recov_month_den * 100.0) if recov_month_den else 0.0
+
+    recall_month_den = sum(1 for c in monthly if c.get("campaign_type") == CampaignType.RECALL.value)
+    recall_month_num = sum(
+        1
+        for c in monthly
+        if c.get("campaign_type") == CampaignType.RECALL.value and c.get("status") == CampaignStatus.RECOVERED.value
+    )
+    recall_rate = (recall_month_num / recall_month_den * 100.0) if recall_month_den else 0.0
+
+    # Lifetime rates (across all history)
+    total_recovery = sum(1 for c in campaigns if c.get("campaign_type") == CampaignType.RECOVERY.value)
+    total_recovery_recovered = sum(
+        1 for c in campaigns if c.get("campaign_type") == CampaignType.RECOVERY.value and c.get("status") == CampaignStatus.RECOVERED.value
+    )
+    lifetime_recovery_rate = (total_recovery_recovered / total_recovery * 100.0) if total_recovery else 0.0
+
+    total_recall = sum(1 for c in campaigns if c.get("campaign_type") == CampaignType.RECALL.value)
+    total_recall_recovered = sum(
+        1 for c in campaigns if c.get("campaign_type") == CampaignType.RECALL.value and c.get("status") == CampaignStatus.RECOVERED.value
+    )
+    lifetime_recall_rate = (total_recall_recovered / total_recall * 100.0) if total_recall else 0.0
+
+    # Time-series (last 12 months ending with current month)
+    def _month_key(dt: datetime) -> str:
+        return f"{dt.year:04d}-{dt.month:02d}"
+
+    def _add_months(dt: datetime, n: int) -> datetime:
+        y = dt.year + (dt.month - 1 + n) // 12
+        m = (dt.month - 1 + n) % 12 + 1
+        return datetime(y, m, 1, tzinfo=timezone.utc)
+
+    months: list[str] = []
+    start_window = _add_months(start_month, -11)
+    cursor = start_window
+    for _ in range(12):
+        months.append(_month_key(cursor))
+        cursor = _add_months(cursor, 1)
+
+    perf_series: list[Dict[str, Any]] = []
+    for mk in months:
+        yr, mo = mk.split("-")
+        s = datetime(int(yr), int(mo), 1, tzinfo=timezone.utc)
+        e = datetime(s.year + (s.month // 12), (s.month % 12) + 1, 1, tzinfo=timezone.utc)
+        slice_items = [c for c in campaigns if (dt := (_as_utc(c.get("updated_at")) or _as_utc(c.get("created_at")))) and s <= dt < e]
+        rec_den = sum(1 for c in slice_items if c.get("campaign_type") == CampaignType.RECOVERY.value)
+        rec_num = sum(1 for c in slice_items if c.get("campaign_type") == CampaignType.RECOVERY.value and c.get("status") == CampaignStatus.RECOVERED.value)
+        rcl_den = sum(1 for c in slice_items if c.get("campaign_type") == CampaignType.RECALL.value)
+        rcl_num = sum(1 for c in slice_items if c.get("campaign_type") == CampaignType.RECALL.value and c.get("status") == CampaignStatus.RECOVERED.value)
+        perf_series.append(
+            {
+                "month": mk,
+                "recovery_rate_percent": round((rec_num / rec_den * 100.0) if rec_den else 0.0, 1),
+                "recall_rate_percent": round((rcl_num / rcl_den * 100.0) if rcl_den else 0.0, 1),
+                "recoveries": rec_num,
+                "recall_recoveries": rcl_num,
+            }
+        )
+
+    # Campaign breakdown (lifetime and month) for pie charts
+    ACTIVE_STATUSES = {CampaignStatus.ATTEMPTING_RECOVERY.value, CampaignStatus.RE_ENGAGED.value}
+    FAILED = CampaignStatus.RECOVERY_FAILED.value
+    DECLINED = CampaignStatus.RECOVERY_DECLINED.value
+
+    def _breakdown(items: list[Dict[str, Any]]) -> Dict[str, int]:
+        return {
+            "handoffs": sum(1 for c in items if c.get("status") == CampaignStatus.HANDOFF_REQUIRED.value),
+            "active_recovery": sum(1 for c in items if c.get("campaign_type") == CampaignType.RECOVERY.value and c.get("status") in ACTIVE_STATUSES),
+            "active_recall": sum(1 for c in items if c.get("campaign_type") == CampaignType.RECALL.value and c.get("status") in ACTIVE_STATUSES),
+            "recovered": sum(1 for c in items if c.get("status") == CampaignStatus.RECOVERED.value),
+            "failed": sum(1 for c in items if c.get("status") == FAILED),
+            "declined": sum(1 for c in items if c.get("status") == DECLINED),
+        }
+
+    breakdown_lifetime = _breakdown(campaigns)
+    breakdown_month = _breakdown(monthly)
+
+    # Appointments trend per month (booked/completed/cancelled)
+    appts = await repo.find_many("appointments", {})
+    appt_series: list[Dict[str, Any]] = []
+    for mk in months:
+        yr, mo = mk.split("-")
+        s = datetime(int(yr), int(mo), 1, tzinfo=timezone.utc)
+        e = datetime(s.year + (s.month // 12), (s.month % 12) + 1, 1, tzinfo=timezone.utc)
+        slice_appts = [a for a in appts if (dt := _as_utc(a.get("appointment_date"))) and s <= dt < e]
+        appt_series.append(
+            {
+                "month": mk,
+                "booked": sum(1 for a in slice_appts if a.get("status") == "booked"),
+                "completed": sum(1 for a in slice_appts if a.get("status") == "completed"),
+                "cancelled": sum(1 for a in slice_appts if a.get("status") == "cancelled"),
+            }
+        )
+
+    # Trailing 90 days rates to reflect near-term performance even when current month has no data yet
+    window_90_start = now - timedelta(days=90)
+    recent = [
+        c
+        for c in campaigns
+        if (dt := (_as_utc(c.get("updated_at")) or _as_utc(c.get("created_at")))) and window_90_start <= dt <= now
+    ]
+    rec_recent_den = sum(1 for c in recent if c.get("campaign_type") == CampaignType.RECOVERY.value)
+    rec_recent_num = sum(1 for c in recent if c.get("campaign_type") == CampaignType.RECOVERY.value and c.get("status") == CampaignStatus.RECOVERED.value)
+    rcl_recent_den = sum(1 for c in recent if c.get("campaign_type") == CampaignType.RECALL.value)
+    rcl_recent_num = sum(1 for c in recent if c.get("campaign_type") == CampaignType.RECALL.value and c.get("status") == CampaignStatus.RECOVERED.value)
+    recovery_rate_90d = (rec_recent_num / rec_recent_den * 100.0) if rec_recent_den else 0.0
+    recall_rate_90d = (rcl_recent_num / rcl_recent_den * 100.0) if rcl_recent_den else 0.0
 
     return {
         "kpis": {
             "appointments_booked_month": booked_month,
             "handoffs_requiring_action": handoffs,
             "active_recovery_campaigns": active_recovery,
+            "active_recall_campaigns": active_recall,
+            "engaged_leads_month": engaged_month,
+            "recoveries_month": recoveries_month,
+            "lifetime_recoveries": total_recovery_recovered,
+            "lifetime_recall_recoveries": total_recall_recovered,
         },
         "conversion_rates": {
             "recovery_rate_percent": round(recovery_rate, 1),
             "recall_rate_percent": round(recall_rate, 1),
+            "lifetime_recovery_rate_percent": round(lifetime_recovery_rate, 1),
+            "lifetime_recall_rate_percent": round(lifetime_recall_rate, 1),
+            "recovery_rate_90d_percent": round(recovery_rate_90d, 1),
+            "recall_rate_90d_percent": round(recall_rate_90d, 1),
+        },
+        "time_window": {
+            "start": start_month.isoformat(),
+            "end": next_month.isoformat(),
+        },
+        "charts": {
+            "performance_timeseries": perf_series,
+            "campaign_breakdown": {
+                "lifetime": breakdown_lifetime,
+                "this_month": breakdown_month,
+            },
+            "appointments_trend": appt_series,
         },
     }
 

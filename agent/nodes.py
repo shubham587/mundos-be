@@ -283,16 +283,17 @@ def node_call_patient(state: Dict[str, Any]) -> Dict[str, Any]:
     patient = state.get("patient") or {}
     phone: str = patient.get("phone", "")
     campaign = state.get("campaign") or {}
+    authorization = os.getenv("AUTHORIZATION", "")
 
     import requests
     response = requests.post(
     "https://api.vapi.ai/call",
     headers={
-        "Authorization": "Bearer 4eba9164-bf9b-49e3-966b-286aa6d83490"
+        "Authorization": f"Bearer {authorization}"
     },
     json={
-        "workflowId": os.getenv("WORKFLOW_ID", "6131edd5-ba16-4746-ac6a-15739bccb9e5"),
-        "phoneNumberId": os.getenv("PHONE_NUMBER_ID", "7eb0770f-4067-45b6-93a9-1b71805937b7"),
+        "workflowId": os.getenv("WORKFLOW_ID", ""),
+        "phoneNumberId": os.getenv("PHONE_NUMBER_ID", ""),
         "customer": {
         "number": phone,
         "name": patient.get("name", ""),

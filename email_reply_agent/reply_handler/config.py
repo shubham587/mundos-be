@@ -22,7 +22,7 @@ class Settings:
 
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
 
-    booking_base_url: str = os.getenv("BOOKING_BASE_URL", "http://192.168.0.134:3001")
+    booking_base_url: str = os.getenv("BOOKING_BASE_URL", "")
     email_from_address: str = os.getenv("EMAIL_FROM_ADDRESS", "noreply@clinic.example.com")
 
     # Gmail / PubSub integration

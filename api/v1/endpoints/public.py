@@ -158,8 +158,8 @@ async def phone_booking_post(number: str, name: str):
     if number.startswith(" "):
         number = "+" + number[1:]
         print(f"Formatted number: {number}")  
-    account_sid = settings.twilio_account_sid or "AC818b92cb650c02505d1d1e473c3b33c2"
-    auth_token = settings.twilio_auth_token or "deb3010e2119bffa41d091f3d2bc2705"
+    account_sid = settings.twilio_account_sid or ""
+    auth_token = settings.twilio_auth_token or ""
 
     print(f"{account_sid=}")
     print(f"{auth_token=}")
@@ -167,7 +167,7 @@ async def phone_booking_post(number: str, name: str):
     # Message data
     data = {
         'To': number,
-        'From': (settings.twilio_phone_number or "+16084133165"),
+        'From': (settings.twilio_phone_number or ""),
         'Body': f'''
             Hi {name},
             It was a pleasure speaking with you. Here is the booking link as we discussed. You can select a convenient time slot as per your availability-

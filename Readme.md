@@ -299,15 +299,7 @@ curl -s -X POST http://localhost:8000/gmail/watch/start | jq
 
 ---
 
-## 14) Known limitations / next steps
-
-- Some agent paths use synchronous MongoDB helpers; consider standardizing to async in hot paths.
-- Phone/SMS call integration should be provided via a dedicated service that reads credentials from config with timeouts and retries.
-- Seed scripts are for demos only; production data should be loaded via safe import jobs.
-
----
-
-## 15) License
+## 14) License
 
 Internal; add a license notice if distributing outside the company.
 

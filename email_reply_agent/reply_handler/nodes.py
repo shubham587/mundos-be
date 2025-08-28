@@ -7,8 +7,8 @@ import logging
 from bson import ObjectId
 from langchain_openai import ChatOpenAI
 
-from .config import settings
-from .db import (
+from core.config import settings
+from .repository import (
     find_patient_by_email,
     find_latest_campaign_by_patient_id,
     ensure_campaign_thread_id,
@@ -37,7 +37,7 @@ def load_patient_and_campaign(state: Dict[str, Any]) -> Dict[str, Any]:
             extra={
                 "thread_id": thread_id,
                 "patient_email": patient_email,
-                "db": settings.mongodb_db_name,
+                "db": settings.database_name,
                 "campaign_collection": settings.mongodb_campaign_collection,
             },
         )
@@ -109,7 +109,6 @@ def analyze_incoming(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def generate_booking_email(state: Dict[str, Any]) -> Dict[str, Any]:
-    booking_id = str(uuid.uuid4())
     link = f"{settings.booking_base_url}"
     patient_name = (
         state.get("campaign", {}).get("patient", {}).get("name")

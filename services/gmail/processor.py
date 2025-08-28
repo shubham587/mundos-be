@@ -9,9 +9,9 @@ from email.utils import parseaddr
 from html2text import html2text
 
 from .client import build_gmail_service
-from email_reply_agent.reply_handler.db import get_last_history_id, set_last_history_id, has_processed_message, mark_processed_message
+from email_reply_agent.reply_handler.repository import get_last_history_id, set_last_history_id, has_processed_message, mark_processed_message
 from email_reply_agent.reply_handler.graph import run_reply_workflow
-from email_reply_agent.reply_handler.config import settings
+from core.config import settings
 
 
 logger = logging.getLogger("services.gmail.processor")

@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 from dotenv import load_dotenv, find_dotenv
 
-from agent.db import get_db
-from agent.services import EmailService, LLMService
+from db.database import get_sync_database as get_db
+from services.communication import EmailService, LLMService
 from zoneinfo import ZoneInfo
 import os
 

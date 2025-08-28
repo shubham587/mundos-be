@@ -21,18 +21,20 @@ class ChannelType(str, Enum):
 
 
 class TreatmentHistoryItem(BaseModel):
-    appointment_id: PyObjectId
-    procedure_name: str
-    procedure_date: datetime
+    appointment_id: Optional[PyObjectId] = None
+    procedure_name: Optional[str] = None
+    procedure_date: Optional[datetime] = None
     next_recommended_follow_up: Optional[str] = None
     next_follow_up_date: Optional[datetime] = None
 
 
 class Patient(MongoModel):
+    id: Optional[PyObjectId] = Field(default=None, alias="_id")
     name: str
     email: str
-    phone: str
+    phone: Optional[str] = None
     patient_type: PatientType
     preferred_channel: List[ChannelType] = Field(default_factory=list)
-    treatment_history: List[TreatmentHistoryItem] = Field(default_factory=list)
-
+    treatment_history: Optional[List[TreatmentHistoryItem]] = Field(default_factory=list)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

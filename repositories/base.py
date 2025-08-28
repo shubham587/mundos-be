@@ -1,3 +1,7 @@
+# Shared MongoDB helper.
+# Simple async methods to find, count, insert, update, delete documents.
+# Auto adds created_at / updated_at and converts values to ObjectId.
+# Inherit this to avoid repeating the same CRUD code.
 from __future__ import annotations
 
 from datetime import datetime, timezone

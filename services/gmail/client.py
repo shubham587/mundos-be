@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, List
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
-from email_reply_agent.reply_handler.config import settings
+from core.config import settings
 
 
 GMAIL_SCOPES = [

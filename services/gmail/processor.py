@@ -9,14 +9,14 @@ from email.utils import parseaddr
 from html2text import html2text
 
 from .client import build_gmail_service
-from email_reply_agent.reply_handler.repository import get_last_history_id, set_last_history_id, has_processed_message, mark_processed_message
+from repositories.agent_data import get_last_history_id, set_last_history_id, has_processed_message, mark_processed_message
 from email_reply_agent.reply_handler.graph import run_reply_workflow
 from core.config import settings
-
 
 logger = logging.getLogger("services.gmail.processor")
 logger.setLevel(logging.INFO)
 
+# ...rest of file (processing logic unchanged)...
 
 def _decode_pubsub_message(data_b64: str) -> Dict[str, Any]:
     decoded = base64.b64decode(data_b64)
@@ -103,9 +103,7 @@ def process_pubsub_push(pubsub_body: Dict[str, Any]) -> Dict[str, Any]:
                 headers = payload.get("headers", [])
                 thread_id = msg.get("threadId")
                 from_header = _get_header(headers, "From")
-                # Parse printable name/email into plain email address
                 from_email = parseaddr(from_header or "")[1] if from_header else None
-                # Extract headers for proper threading and subject continuity
                 smtp_message_id = _get_header(headers, "Message-Id") or _get_header(headers, "Message-ID")
                 subject_header = _get_header(headers, "Subject")
                 references_header = _get_header(headers, "References")
@@ -114,7 +112,6 @@ def process_pubsub_push(pubsub_body: Dict[str, Any]) -> Dict[str, Any]:
                     if not in_reply_to:
                         continue
                 body_text = _extract_plain_text(payload)
-                # Log agent invocation context (visible in terminal)
                 logger.info(
                     "gmail.invoke_agent",
                     extra={
@@ -143,10 +140,8 @@ def process_pubsub_push(pubsub_body: Dict[str, Any]) -> Dict[str, Any]:
                         },
                     )
                 except Exception:
-                    # Never let logging failures break processing
                     pass
                 mark_processed_message(email_address, msg_id, thread_id)
-                # Ensure visibility even if logger config filters this module
                 try:
                     print(
                         f"[GMAIL] invoke_agent thread_id={thread_id} from={from_email} subject={subject_header} body_len={len(body_text or '')}",

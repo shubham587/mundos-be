@@ -1,11 +1,6 @@
-# Helper functions for the email reply agent.
-# Central place to read/update campaigns, interactions, patients, and Gmail sync state.
-# Covers:
-# - finding patients & latest campaigns
-# - updating campaign status / follow-up progress
-# - storing interactions (optional AI intent & sentiment)
-# - maintaining engagement summaries
-# - tracking Gmail history & processed message IDs (avoid duplicates)
+# Central data access helpers used by the email reply agent and other services.
+# Provides focused CRUD utilities for patients, campaigns, interactions, and
+# Gmail sync/process tracking (history + processed message ids).
 from __future__ import annotations
 
 from typing import Any, Optional, Dict
@@ -13,38 +8,48 @@ from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from pymongo import DESCENDING
 
-from db.database import get_sync_database  # unified sync DB
-from .config import settings
+from db.database import get_sync_database
+from core.config import settings
+
+# --- Internal helpers -------------------------------------------------------
 
 def _db():
     return get_sync_database()
+
 
 def get_campaign_collection():
     name = getattr(settings, "mongodb_campaign_collection", "campaigns")
     return _db()[name]
 
+
 def get_interaction_collection():
     return _db()["interactions"]
+
 
 def get_gmail_state_collection():
     return _db()["gmail_states"]
 
+
 def get_gmail_processed_collection():
     return _db()["gmail_processed"]
+
 
 def get_patient_collection():
     return _db()["patients"]
 
-# Lookups
+# --- Lookups ----------------------------------------------------------------
+
 def find_patient_by_email(email: str) -> Optional[Dict[str, Any]]:
     if not email:
         return None
     return get_patient_collection().find_one({"email": {"$regex": f"^{email}$", "$options": "i"}})
 
+
 def find_latest_campaign_by_patient_id(patient_id: ObjectId) -> Optional[Dict[str, Any]]:
     return get_campaign_collection().find_one({"patient_id": patient_id}, sort=[("updated_at", DESCENDING)])
 
-# Updates
+# --- Campaign Updates -------------------------------------------------------
+
 def ensure_campaign_thread_id(campaign_id: ObjectId, thread_id: Optional[str]) -> None:
     if not thread_id:
         return
@@ -52,6 +57,7 @@ def ensure_campaign_thread_id(campaign_id: ObjectId, thread_id: Optional[str]) -
         {"_id": campaign_id},
         {"$set": {"channel.thread_id": thread_id, "updated_at": datetime.now(timezone.utc)}},
     )
+
 
 def set_campaign_form_sent(campaign_id: ObjectId, link_url: str, reply_thread_id: str) -> None:
     now = datetime.now(timezone.utc)
@@ -70,6 +76,7 @@ def set_campaign_form_sent(campaign_id: ObjectId, link_url: str, reply_thread_id
         },
     )
 
+
 def set_campaign_declined(campaign_id: ObjectId) -> None:
     now = datetime.now(timezone.utc)
     get_campaign_collection().update_one(
@@ -77,12 +84,14 @@ def set_campaign_declined(campaign_id: ObjectId) -> None:
         {"$set": {"status": "RECOVERY_DECLINED", "updated_at": now}},
     )
 
+
 def set_campaign_handoff_required(campaign_id: ObjectId) -> None:
     now = datetime.now(timezone.utc)
     get_campaign_collection().update_one(
         {"_id": campaign_id},
         {"$set": {"status": "HANDOFF_REQUIRED", "updated_at": now}},
     )
+
 
 def set_campaign_re_engaged(campaign_id: ObjectId) -> None:
     now = datetime.now(timezone.utc)
@@ -97,6 +106,8 @@ def set_campaign_re_engaged(campaign_id: ObjectId) -> None:
             }
         },
     )
+
+# --- Interactions -----------------------------------------------------------
 
 def insert_interaction(
     *,
@@ -117,8 +128,10 @@ def insert_interaction(
         doc["ai_analysis"] = {k: v for k, v in {"intent": intent, "sentiment": sentiment}.items() if v is not None}
     return get_interaction_collection().insert_one(doc)
 
+
 def fetch_interactions_for_campaign(campaign_id: ObjectId) -> list[Dict[str, Any]]:
     return list(get_interaction_collection().find({"campaign_id": campaign_id}).sort("timestamp", 1))
+
 
 def update_engagement_summary(campaign_id: ObjectId, summary: str) -> None:
     get_campaign_collection().update_one(
@@ -126,10 +139,12 @@ def update_engagement_summary(campaign_id: ObjectId, summary: str) -> None:
         {"$set": {"engagement_summary": summary, "updated_at": datetime.now(timezone.utc)}},
     )
 
-# Gmail processing state
+# --- Gmail processing state -------------------------------------------------
+
 def get_last_history_id(email_address: str) -> Optional[str]:
     doc = get_gmail_state_collection().find_one({"emailAddress": email_address})
     return doc.get("historyId") if doc else None
+
 
 def set_last_history_id(email_address: str, history_id: str) -> None:
     get_gmail_state_collection().update_one(
@@ -138,8 +153,10 @@ def set_last_history_id(email_address: str, history_id: str) -> None:
         upsert=True,
     )
 
+
 def has_processed_message(email_address: str, gmail_message_id: str) -> bool:
     return get_gmail_processed_collection().find_one({"emailAddress": email_address, "gmailMessageId": gmail_message_id}) is not None
+
 
 def mark_processed_message(email_address: str, gmail_message_id: str, thread_id: Optional[str] = None) -> None:
     get_gmail_processed_collection().update_one(
@@ -154,3 +171,10 @@ def mark_processed_message(email_address: str, gmail_message_id: str, thread_id:
         },
         upsert=True,
     )
+
+__all__ = [
+    'find_patient_by_email','find_latest_campaign_by_patient_id','ensure_campaign_thread_id','set_campaign_form_sent',
+    'set_campaign_declined','set_campaign_handoff_required','set_campaign_re_engaged','insert_interaction',
+    'fetch_interactions_for_campaign','update_engagement_summary','get_last_history_id','set_last_history_id',
+    'has_processed_message','mark_processed_message'
+]

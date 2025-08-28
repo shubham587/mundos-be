@@ -12,10 +12,7 @@ from email_reply_agent.reply_handler.graph import run_reply_workflow
 from services.gmail.processor import process_pubsub_push
 from core.config import settings
 from services.gmail.client import start_watch, build_gmail_service
-from email_reply_agent.reply_handler.repository import (
-    set_last_history_id,
-    get_last_history_id,
-)
+from repositories.agent_data import set_last_history_id, get_last_history_id
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 
 from langgraph.graph import StateGraph, END
 
-from .state import ReplyState
+from email_reply_agent.types import ReplyState
 from .nodes import (
     load_patient_and_campaign,
     analyze_incoming,

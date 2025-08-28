@@ -21,7 +21,7 @@ from .repository import (
 )
 from .prompts import INTENT_CLASSIFIER_PROMPT, ALLOWED_INTENTS
 from .prompts import KB_QA_PROMPT, KB_TEXT
-from .sender_gmail import send_gmail_message
+from services.gmail.sender import send_gmail_message
 
 logger = logging.getLogger("email_reply_agent.reply_handler.nodes")
 

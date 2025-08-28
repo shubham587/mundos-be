@@ -11,7 +11,7 @@ import warnings
 
 from core.config import settings
 from services.gmail.client import start_watch, build_gmail_service
-from email_reply_agent.reply_handler.repository import set_last_history_id, get_last_history_id
+from repositories.agent_data import set_last_history_id, get_last_history_id
 
 try:
     from urllib3.exceptions import NotOpenSSLWarning
